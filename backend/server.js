@@ -17,6 +17,7 @@ AWS.config.update({
   region: process.env.AWS_REGION,
 });
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
+// ===== USERS =====
 app.get('/users', async (req, res) => {
   const params = {
     TableName: process.env.AWS_TABLE,
