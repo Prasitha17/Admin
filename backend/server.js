@@ -5,7 +5,7 @@ const AWS = require('aws-sdk');
 const bodyParser = require('body-parser');
 require('dotenv').config();
 const app = express();
-const port = 3001;
+const port = 3002;
 const corsOptions = {
   origin: 'http://localhost:3000',
   optionsSuccessStatus: 200,
@@ -21,7 +21,7 @@ const dynamoDb = new AWS.DynamoDB.DocumentClient();
 app.get('/users', async (req, res) => {
   const params = {
     TableName: process.env.AWS_TABLE,
-    ProjectionExpression: 'userId, firstName, lastName, email, password, category, courseCompleted, coursesInProgress, emailVerified',
+    ProjectionExpression: 'userId, firstName, lastName, email, password, category, courseCompleted, coursesInProgress, emailVerified, isApproved',
   };
   try {
     const data = await dynamoDb.scan(params).promise();
@@ -89,6 +89,39 @@ app.put('/users/:email', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.patch('/users/:email/approval', async (req, res) => {
+  const email = decodeURIComponent(req.params.email).toLowerCase();
+  const { isApproved } = req.body;
+
+  console.log("PATCH /users/:email/approval");
+  console.log("Email:", email);
+  console.log("Request Body:", req.body);
+
+  if (!['approved', 'rejected'].includes(isApproved)) {
+    return res.status(400).json({ error: 'Invalid approval status' });
+  }
+
+  const params = {
+    TableName: process.env.AWS_TABLE,
+    Key: { email },
+    UpdateExpression: 'set isApproved = :status',
+    ExpressionAttributeValues: {
+      ':status': isApproved,
+    },
+    ReturnValues: 'UPDATED_NEW',
+  };
+
+  console.log("Params to DynamoDB:", params);
+
+  try {
+    const result = await dynamoDb.update(params).promise();
+    res.status(200).json({ message: 'Approval status updated', updated: result.Attributes });
+  } catch (err) {
+    console.error('❌ Error updating approval:', err.message, err);
+    res.status(500).json({ error: 'Failed to update approval' });
+  }
+});
+
 app.delete('/users/:email', async (req, res) => {
   const email = decodeURIComponent(req.params.email);
   const params = {
@@ -125,6 +158,7 @@ app.get('/courses', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 app.post('/courses', async (req, res) => {
   const {
     userId = '', category = '', completed = false, contents = '', cost = '',
@@ -152,6 +186,7 @@ app.post('/courses', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 app.put('/courses/:courseId', async (req, res) => {
   const courseId = req.params.courseId;
   const { userId, ...updates } = req.body;
@@ -189,6 +224,7 @@ app.put('/courses/:courseId', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 app.delete('/courses/:courseId', async (req, res) => {
   const courseId = req.params.courseId;
   const { userId } = req.body;
@@ -197,7 +233,7 @@ app.delete('/courses/:courseId', async (req, res) => {
   }
   const params = {
     TableName: process.env.AWS_COURSES_TABLE,
-    Key: { courseId, userId }, 
+    Key: { courseId, userId },
   };
   try {
     await dynamoDb.delete(params).promise();
@@ -207,6 +243,7 @@ app.delete('/courses/:courseId', async (req, res) => {
     res.status(500).json({ error: 'Failed to delete course' });
   }
 });
+
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
